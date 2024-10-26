@@ -1,8 +1,8 @@
-using AluraCrawler.Services;
+using AluraCrawler.Domain.Services;
 
 namespace AluraCrawler
 {
-    public class Worker(ILogger<Worker> logger, AlureService service) : BackgroundService
+    public class Worker(ILogger<Worker> logger, IAlureService service) : BackgroundService
     {
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {

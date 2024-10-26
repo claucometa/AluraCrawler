@@ -1,10 +1,15 @@
-﻿using AluraCrawler.Models;
+﻿using AluraCrawler.Domain.Entities;
+using AluraCrawler.Domain.Repositories;
+using AluraCrawler.Domain.Services;
 using OpenQA.Selenium;
+using System.Text.RegularExpressions;
 
-namespace AluraCrawler.Services
+namespace AluraCrawler.Infra.Services
 {
-    public class AlureService(IWebDriver driver, ILogger<AlureService> logger)
+    public class AlureService(IWebDriver driver, ILogger<AlureService> logger, ICursoRepo repo) : IAlureService
     {
+        Regex re = new Regex(@"\d+");        
+
         public async Task Run(CancellationToken stoppingToken)
         {
             // Define os criterios de busca
@@ -36,10 +41,14 @@ namespace AluraCrawler.Services
             }
 
             // Segunda etapa, alimenta os cursos
-            List<CursoAlura> cursos = [];
-
             foreach (var link in links)
             {
+                if (await repo.Exists(link))
+                {
+                    logger.LogInformation("Esse curso já foi adicionado {link}", link);
+                    continue;
+                }
+
                 try
                 {
                     driver.Navigate().GoToUrl(link);
@@ -72,7 +81,13 @@ namespace AluraCrawler.Services
                 if (cargaHoraria is null || titulo is null || descricao is null)
                     continue;
 
-                var curso = new CursoAlura() { Link = link, Titulo = titulo, CargaHoraria = cargaHoraria, Descricao = descricao };
+                if(!int.TryParse(re.Match(cargaHoraria)?.Value, out int ch))
+                {
+                    logger.LogError("Falha ao converter cargaHoraria {cargaHoraira} {link}", cargaHoraria, link);
+                    continue;
+                }
+
+                var curso = new CursoAlura() { Link = link, Titulo = titulo, CargaHoraria = ch, Descricao = descricao };
 
                 try
                 {
@@ -86,7 +101,8 @@ namespace AluraCrawler.Services
                 }
 
                 logger.LogInformation("Curso encontrado {titulo} {carga} Instrutor {total}", curso.Titulo, curso.CargaHoraria, curso.Instrutor);
-                cursos.Add(curso);
+
+                var rows = await repo.Add(curso);
             }
 
             // Close the browser
